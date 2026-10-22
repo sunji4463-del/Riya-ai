@@ -17,6 +17,9 @@ class LiaApplication : Application(), ViewModelStoreOwner {
     }
 
     val voiceVm: VoiceViewModel by lazy {
-        ViewModelProvider(this, factory)[VoiceViewModel::class.java].also { it.chat = chatVm }
+        ViewModelProvider(this, factory)[VoiceViewModel::class.java].also { v ->
+            v.chat = chatVm
+            chatVm.onActionsExecuted = { v.enterWakeMode() }
+        }
     }
 }
