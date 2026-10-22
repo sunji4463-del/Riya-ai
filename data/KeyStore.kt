@@ -13,6 +13,11 @@ class KeyStore(context: Context) {
         get() = sp.getString("groq_keys", "") ?: ""
         set(v) = sp.edit().putString("groq_keys", v.trim()).apply()
 
+    /** "bn-BD" (বাংলা) অথবা "en-US" */
+    var voiceLang: String
+        get() = sp.getString("voice_lang", "bn-BD") ?: "bn-BD"
+        set(v) = sp.edit().putString("voice_lang", v).apply()
+
     fun groqKeyList(): List<String> =
         groqKeys.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 }
