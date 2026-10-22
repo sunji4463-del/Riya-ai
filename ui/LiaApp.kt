@@ -12,14 +12,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.lia.assistant.LiaApplication
 import com.lia.assistant.ui.theme.LiaColors
 
 private fun NavController.go(route: String) = navigate(route) {
@@ -32,15 +33,21 @@ private fun NavController.go(route: String) = navigate(route) {
 @Composable
 fun LiaApp() {
     val nav = rememberNavController()
-    val vm: ChatViewModel = viewModel()
-    val voice: VoiceViewModel = viewModel()
-    voice.chat = vm
+    val app = LocalContext.current.applicationContext as LiaApplication
+    val vm = app.chatVm
+    val voice = app.voiceVm
 
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "home"
     val showBar = route in listOf("home", "chat", "history", "settings")
     val imeVisible = WindowInsets.isImeVisible
     val openVoice: () -> Unit = { nav.navigate("voice") { launchSingleTop = true } }
+    val leaveVoice: () -> Unit = {
+        if (nav.previousBackStackEntry != null) nav.popBackStack()
+        else nav.navigate("home") { popUpTo("voice") { inclusive = true } }
+    }
+    // ভয়েস সেশন চালু থাকা অবস্থায় অ্যাপ খুললে সরাসরি ভয়েস স্ক্রিনে
+    val startRoute = remember { if (voice.active) "voice" else "home" }
 
     LiaBackground {
         Scaffold(
@@ -51,7 +58,7 @@ fun LiaApp() {
                 }
             }
         ) { pad ->
-            NavHost(nav, startDestination = "home", modifier = Modifier.padding(pad)) {
+            NavHost(nav, startDestination = startRoute, modifier = Modifier.padding(pad)) {
                 composable("home") {
                     HomeScreen(
                         onVoice = openVoice,
@@ -70,8 +77,8 @@ fun LiaApp() {
                 composable("voice") {
                     VoiceScreen(
                         voice = voice,
-                        onMinimize = { nav.popBackStack() },
-                        onEnd = { voice.stop(); nav.popBackStack() }
+                        onMinimize = leaveVoice,
+                        onEnd = { voice.stop(); leaveVoice() }
                     )
                 }
             }
