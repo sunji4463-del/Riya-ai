@@ -2,6 +2,7 @@ package com.lia.assistant.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -36,18 +37,29 @@ import com.lia.assistant.ui.theme.LiaColors
 fun VoiceScreen(voice: VoiceViewModel, onMinimize: () -> Unit, onEnd: () -> Unit) {
     val ctx = LocalContext.current
 
+    // Microphone + (Android 13+ হলে) Notification permission একসাথে চাওয়া
     val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { ok ->
-        if (ok) voice.start() else voice.info = "Lia-র সাথে কথা বলতে Microphone permission দরকার।"
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        val micOk = ContextCompat.checkSelfPermission(
+            ctx, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (micOk) voice.start()
+        else voice.info = "Lia-র সাথে কথা বলতে Microphone permission দরকার।"
     }
 
     LaunchedEffect(Unit) {
         if (!voice.active) {
-            val granted = ContextCompat.checkSelfPermission(
-                ctx, Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-            if (granted) voice.start() else launcher.launch(Manifest.permission.RECORD_AUDIO)
+            val need = mutableListOf<String>()
+            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED
+            ) need.add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) need.add(Manifest.permission.POST_NOTIFICATIONS)
+
+            if (need.isEmpty()) voice.start() else launcher.launch(need.toTypedArray())
         }
     }
 
