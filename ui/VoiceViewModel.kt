@@ -32,10 +32,7 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
     private var lastUtteranceId = ""
     private var errorStreak = 0
 
-    /** LiaApplication এখানে ChatViewModel বসিয়ে দেয় */
     var chat: ChatViewModel? = null
-
-    /** LiaService নোটিফিকেশন আপডেটের জন্য এটা বসায় */
     var onChange: (() -> Unit)? = null
 
     private var _state by mutableStateOf(VoiceState.IDLE)
@@ -62,7 +59,30 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
     var info by mutableStateOf("")
     var caption by mutableStateOf("")
 
+    /** true হলে "Lia" শব্দ না থাকলে কথা উপেক্ষা করা হয় */
+    var gated by mutableStateOf(false)
+        private set
+
     private val relisten = Runnable { listen() }
+
+    private val wakeRegex = Regex(
+        "(?i)(\\blia\\b|\\bleah\\b|\\bleia\\b|\\blea\\b|লিয়া|লিয়|লীয়া|লিআ|লিয়ে)"
+    )
+
+    // ---------- wake mode ----------
+
+    fun enterWakeMode() {
+        if (!active) return
+        gated = true
+        info = "কথা বলতে আগে \"Lia\" বলো, অথবা অরবে ট্যাপ করো।"
+    }
+
+    private fun exitWakeMode() {
+        if (gated) {
+            gated = false
+            info = ""
+        }
+    }
 
     // ---------- সর্বজনীন কমান্ড ----------
 
@@ -70,6 +90,7 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
         if (active) return
         active = true
         muted = false
+        gated = false
         info = ""
         caption = ""
         partial = ""
@@ -86,6 +107,7 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
     fun stop() {
         active = false
         muted = false
+        gated = false
         main.removeCallbacks(relisten)
         lastUtteranceId = ""
         tts?.stop()
@@ -103,8 +125,9 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
             main.removeCallbacks(relisten)
             recognizer?.cancel()
             if (state == VoiceState.LISTENING) state = VoiceState.IDLE
-        } else if (state == VoiceState.IDLE) {
-            listen()
+        } else {
+            exitWakeMode()
+            if (state == VoiceState.IDLE) listen()
         }
     }
 
@@ -119,7 +142,6 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** অরবে ট্যাপ: কথা বললে থামাও ও শোনো, চুপ থাকলে শোনা শুরু করো */
     fun tapOrb() {
         when (state) {
             VoiceState.SPEAKING -> {
@@ -127,12 +149,15 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
                 tts?.stop()
                 main.removeCallbacks(relisten)
                 state = VoiceState.IDLE
+                exitWakeMode()
                 listen()
             }
             VoiceState.IDLE -> {
                 if (muted) muted = false
+                exitWakeMode()
                 listen()
             }
+            VoiceState.LISTENING -> exitWakeMode()
             else -> {}
         }
     }
@@ -178,7 +203,7 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
             val p = partialResults
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()
-            if (!p.isNullOrBlank()) partial = p
+            if (!p.isNullOrBlank() && !gated) partial = p
         }
 
         override fun onResults(results: Bundle?) {
@@ -190,7 +215,7 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
                 relistenSoon(250)
                 return
             }
-            partial = text
+            partial = if (gated) "" else text
             handleUtterance(text)
         }
 
@@ -228,6 +253,14 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
     // ---------- AI-কে পাঠানো ----------
 
     private fun handleUtterance(text: String) {
+        if (gated) {
+            if (!wakeRegex.containsMatchIn(text)) {
+                relistenSoon(300)
+                return
+            }
+            exitWakeMode()
+            partial = text
+        }
         state = VoiceState.THINKING
         info = ""
         val c = chat
