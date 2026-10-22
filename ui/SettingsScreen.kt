@@ -23,7 +23,7 @@ import com.lia.assistant.data.KeyStore
 import com.lia.assistant.ui.theme.LiaColors
 
 @Composable
-fun SettingsScreen(onConnections: () -> Unit) {
+fun SettingsScreen(onConnections: () -> Unit, onPhone: () -> Unit) {
     val ctx = LocalContext.current
     val store = remember { KeyStore(ctx) }
     val ready = store.geminiKey.isNotEmpty() && store.groqKeyList().isNotEmpty()
@@ -60,7 +60,10 @@ fun SettingsScreen(onConnections: () -> Unit) {
 
         SectionTitle("APP SETTINGS")
         SettingRow(Icons.Rounded.Palette, "Look & feel", "Dark - Classic orb") { soon() }
-        SettingRow(Icons.Rounded.PhoneAndroid, "Phone control", "Quick actions and permissions") { soon() }
+        SettingRow(
+            Icons.Rounded.PhoneAndroid, "Phone control", "Accessibility, permissions, test actions",
+            onClick = onPhone
+        )
         SettingRow(
             Icons.Rounded.BatteryChargingFull,
             "Background voice",
