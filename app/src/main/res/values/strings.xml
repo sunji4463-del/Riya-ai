@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_desc">LIA uses this service so your AI assistant can open apps, tap, type, scroll and lock the screen when you ask by voice or chat.</string>
+</resources>
