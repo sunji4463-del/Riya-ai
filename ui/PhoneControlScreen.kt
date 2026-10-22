@@ -1,9 +1,13 @@
 package com.lia.assistant.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,16 +21,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lia.assistant.LiaAccessibilityService
 import com.lia.assistant.PhoneControl
+import com.lia.assistant.data.KeyStore
 import com.lia.assistant.ui.theme.LiaColors
 
 private fun ok(b: Boolean, name: String) = "$name ${if (b) "✓" else "✗"}"
@@ -35,8 +42,8 @@ private fun ok(b: Boolean, name: String) = "$name ${if (b) "✓" else "✗"}"
 fun PhoneControlScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val main = remember { Handler(Looper.getMainLooper()) }
+    val store = remember { KeyStore(ctx) }
 
-    // অন্য স্ক্রিন (সেটিংস) থেকে ফিরলে অবস্থা আবার চেক করার জন্য
     var tick by remember { mutableIntStateOf(0) }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
@@ -46,18 +53,30 @@ fun PhoneControlScreen(onBack: () -> Unit) {
         owner.lifecycle.addObserver(ob)
         onDispose { owner.lifecycle.removeObserver(ob) }
     }
+
+    fun granted(p: String) =
+        ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
+
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { tick++ }
+
     val accOn = remember(tick) {
         LiaAccessibilityService.instance != null || PhoneControl.accessibilityEnabled(ctx)
     }
     val overlayOn = remember(tick) { Settings.canDrawOverlays(ctx) }
+    val callOn = remember(tick) {
+        granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.READ_CONTACTS)
+    }
 
     var appName by remember { mutableStateOf("") }
     var tapText by remember { mutableStateOf("") }
     var typeText by remember { mutableStateOf("") }
+    var cc by remember { mutableStateOf(store.countryCode) }
+    var confirm by remember { mutableStateOf(store.confirmActions) }
 
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
 
-    /** delayMs > 0 হলে সময় দেয়, যাতে তুমি অন্য অ্যাপে গিয়ে টেস্ট করতে পারো */
     fun act(delayMs: Long = 0, block: (LiaAccessibilityService) -> String) {
         val go = {
             val s = LiaAccessibilityService.instance
@@ -104,6 +123,17 @@ fun PhoneControlScreen(onBack: () -> Unit) {
         ) { PhoneControl.openOverlaySettings(ctx) }
 
         Spacer(Modifier.height(12.dp))
+        StatusCard(
+            "Calls & contacts",
+            "নাম বলে কল করতে ও WhatsApp মেসেজ পাঠাতে লাগে। কন্টাক্ট শুধু ফোনেই থাকে।",
+            callOn, "Allow calls & contacts"
+        ) {
+            permLauncher.launch(
+                arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_CONTACTS)
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
         LiaCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text("Accessibility-র সুইচ ধূসর হলে", fontWeight = FontWeight.SemiBold, color = LiaColors.TextMain)
@@ -113,6 +143,45 @@ fun PhoneControlScreen(onBack: () -> Unit) {
                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
                 )
                 GradientButton("Open LIA app info") { PhoneControl.openAppInfo(ctx) }
+            }
+        }
+
+        Text(
+            "AGENT SETTINGS", fontSize = 12.sp, color = LiaColors.PurpleLight, letterSpacing = 2.sp,
+            modifier = Modifier.padding(top = 22.dp, bottom = 8.dp)
+        )
+        LiaCard(Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("কল/মেসেজের আগে জিজ্ঞেস করো", fontWeight = FontWeight.SemiBold, color = LiaColors.TextMain)
+                    Text(
+                        "চালু থাকলে Lia \"হ্যাঁ\" শুনে তবেই কল বা মেসেজ করবে।",
+                        fontSize = 12.sp, color = LiaColors.TextSub
+                    )
+                }
+                Switch(
+                    checked = confirm,
+                    onCheckedChange = { confirm = it; store.confirmActions = it },
+                    colors = SwitchDefaults.colors(
+                        checkedTrackColor = LiaColors.Purple,
+                        checkedThumbColor = Color.White
+                    )
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        LiaCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("দেশের কোড (WhatsApp নম্বরের জন্য)", fontWeight = FontWeight.SemiBold, color = LiaColors.TextMain)
+                Text(
+                    "01712... নম্বর থেকে 8801712... বানাতে। বাংলাদেশ = 880, ভারত = 91।",
+                    fontSize = 12.sp, color = LiaColors.TextSub,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+                Field(cc, {
+                    cc = it.filter { c -> c.isDigit() }.take(4)
+                    store.countryCode = cc
+                }, "880")
             }
         }
 
