@@ -45,6 +45,16 @@ object PhoneControl {
         )
     }
 
+    /**
+     * অ্যাপ/স্ক্রিন খোলে। Accessibility চালু থাকলে তার context ব্যবহার করে,
+     * যাতে ব্যাকগ্রাউন্ড থেকেও খোলার সম্ভাবনা বাড়ে।
+     */
+    fun launch(ctx: Context, intent: Intent) {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val c: Context = LiaAccessibilityService.instance ?: ctx
+        c.startActivity(intent)
+    }
+
     // ---------- অ্যাপ লিস্ট ও খোলা ----------
 
     fun apps(ctx: Context): List<AppItem> {
@@ -56,28 +66,29 @@ object PhoneControl {
             .sortedBy { it.label.lowercase() }
     }
 
-    private fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+    private fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{M}\\p{N}]"), "")
 
-    /** নাম (যেমন "youtube", "whatsapp") দিয়ে অ্যাপ খোলে। ফলাফলের বার্তা ফেরত দেয় */
-    fun openApp(ctx: Context, name: String): String {
+    /** (সফল?, বার্তা) */
+    fun openAppResult(ctx: Context, name: String): Pair<Boolean, String> {
         val q = norm(name)
-        if (q.isEmpty()) return "অ্যাপের নাম দাও।"
+        if (q.isEmpty()) return false to "অ্যাপের নাম দাও।"
         val all = apps(ctx)
         val hit = all.firstOrNull { norm(it.label) == q }
             ?: all.firstOrNull { norm(it.label).startsWith(q) }
             ?: all.firstOrNull { norm(it.label).contains(q) }
             ?: all.firstOrNull { norm(it.label).length >= 3 && q.contains(norm(it.label)) }
             ?: all.firstOrNull { it.pkg.contains(q, ignoreCase = true) }
-            ?: return "\"$name\" নামে কোনো অ্যাপ পাইনি।"
+            ?: return false to "\"$name\" নামে কোনো অ্যাপ পাইনি।"
 
         val intent = ctx.packageManager.getLaunchIntentForPackage(hit.pkg)
-            ?: return "${hit.label} খোলা যায়নি।"
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ?: return false to "${hit.label} খোলা যায়নি।"
         return try {
-            ctx.startActivity(intent)
-            "${hit.label} খুলেছি।"
+            launch(ctx, intent)
+            true to "${hit.label} খুলেছি।"
         } catch (e: Exception) {
-            "${hit.label} খুলতে পারিনি: ${e.message}"
+            false to "${hit.label} খুলতে পারিনি: ${e.message}"
         }
     }
+
+    fun openApp(ctx: Context, name: String): String = openAppResult(ctx, name).second
 }
