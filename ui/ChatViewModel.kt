@@ -23,8 +23,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private var job: Job? = null
     private var currentId: String? = null
 
-    val chats = mutableStateListOf<Chat>()      // সেভ করা সব চ্যাট (নতুন আগে)
-    val messages = mutableStateListOf<Msg>()    // এখন খোলা চ্যাট
+    val chats = mutableStateListOf<Chat>()
+    val messages = mutableStateListOf<Msg>()
     var loading by mutableStateOf(false)
         private set
 
@@ -54,17 +54,26 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         if (currentId == id) newChat()
     }
 
-    fun send(text: String) {
+    /**
+     * voice = true হলে উত্তর ছোট ও মুখে বলার মতো হয়।
+     * onResult: সফল হলে উত্তরের লেখা, ব্যর্থ হলে null।
+     */
+    fun send(text: String, voice: Boolean = false, onResult: ((String?) -> Unit)? = null) {
         val t = text.trim()
-        if (t.isEmpty() || loading) return
+        if (t.isEmpty() || loading) {
+            onResult?.invoke(null)
+            return
+        }
         messages.add(Msg(t, true))
         persist()
         loading = true
         job = viewModelScope.launch {
+            var result: String? = null
             try {
                 val history = messages.filter { !it.error }.takeLast(20)
-                val reply = AiClient.reply(history, keys.groqKeyList(), keys.geminiKey)
+                val reply = AiClient.reply(history, keys.groqKeyList(), keys.geminiKey, voice)
                 messages.add(Msg(reply, false))
+                result = reply
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -72,6 +81,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             }
             loading = false
             persist()
+            onResult?.invoke(result)
         }
     }
 
