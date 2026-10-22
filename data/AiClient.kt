@@ -8,7 +8,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object AiClient {
-    // মডেলের নাম ভবিষ্যতে বদলাতে চাইলে শুধু এখানে বদলাও
     const val GROQ_MODEL = "llama-3.3-70b-versatile"
     const val GEMINI_MODEL = "gemini-2.5-flash"
 
@@ -18,19 +17,25 @@ object AiClient {
         "(Bengali script or romanized Banglish), reply in Bengali script. " +
         "Keep replies short and clear unless the user asks for detail."
 
-    private var rr = 0 // Groq key গুলো পালা করে ব্যবহারের জন্য
+    private const val VOICE_HINT =
+        " The user is talking to you by voice, so answer in 1 to 3 short, natural spoken " +
+        "sentences. No markdown, lists, emojis or symbols."
+
+    private var rr = 0
 
     suspend fun reply(
         history: List<Msg>,
         groqKeys: List<String>,
-        geminiKey: String
+        geminiKey: String,
+        voice: Boolean = false
     ): String = withContext(Dispatchers.IO) {
+        val system = if (voice) SYSTEM + VOICE_HINT else SYSTEM
         var lastErr = "কোনো API key নেই। Settings → Connections-এ key দাও।"
 
         for (i in groqKeys.indices) {
             val key = groqKeys[(rr + i) % groqKeys.size]
             try {
-                val out = groq(history, key)
+                val out = groq(history, key, system)
                 rr = (rr + i + 1) % groqKeys.size
                 return@withContext out
             } catch (e: Exception) {
@@ -39,7 +44,7 @@ object AiClient {
         }
         if (geminiKey.isNotEmpty()) {
             try {
-                return@withContext gemini(history, geminiKey)
+                return@withContext gemini(history, geminiKey, system)
             } catch (e: Exception) {
                 lastErr = "Gemini: ${e.message}"
             }
@@ -47,8 +52,8 @@ object AiClient {
         throw Exception(lastErr)
     }
 
-    private fun groq(history: List<Msg>, key: String): String {
-        val msgs = JSONArray().put(JSONObject().put("role", "system").put("content", SYSTEM))
+    private fun groq(history: List<Msg>, key: String, system: String): String {
+        val msgs = JSONArray().put(JSONObject().put("role", "system").put("content", system))
         history.forEach {
             msgs.put(
                 JSONObject()
@@ -70,7 +75,7 @@ object AiClient {
             .getJSONObject("message").getString("content").trim()
     }
 
-    private fun gemini(history: List<Msg>, key: String): String {
+    private fun gemini(history: List<Msg>, key: String, system: String): String {
         val contents = JSONArray()
         history.forEach {
             contents.put(
@@ -82,7 +87,7 @@ object AiClient {
         val body = JSONObject()
             .put(
                 "systemInstruction",
-                JSONObject().put("parts", JSONArray().put(JSONObject().put("text", SYSTEM)))
+                JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system)))
             )
             .put("contents", contents)
             .toString()
