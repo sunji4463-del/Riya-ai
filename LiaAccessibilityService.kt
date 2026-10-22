@@ -45,7 +45,6 @@ class LiaAccessibilityService : AccessibilityService() {
     fun quickSettings() = performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
     fun powerMenu() = performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
 
-    /** স্ক্রিন লক (Android 9+) */
     fun lockScreen(): Boolean =
         if (Build.VERSION.SDK_INT >= 28) performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) else false
 
@@ -54,11 +53,6 @@ class LiaAccessibilityService : AccessibilityService() {
 
     // ---------- স্ক্রিন পড়া ----------
 
-    /**
-     * স্ক্রিনের দৃশ্যমান লেখা লিস্ট করে।
-     * ফ্ল্যাগ: C=ক্লিক করা যায়, E=লেখা যায়, S=স্ক্রল হয়, X=চেক করা
-     * @x,y = এলিমেন্টের মাঝের স্থানাঙ্ক
-     */
     fun readScreen(max: Int = 150): String {
         val root = rootInActiveWindow ?: return "(screen not readable)"
         val sb = StringBuilder()
@@ -96,7 +90,6 @@ class LiaAccessibilityService : AccessibilityService() {
 
     // ---------- ট্যাপ ----------
 
-    /** লেখা বা description মিললে সেই বাটনে ক্লিক */
     fun clickText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val matches = root.findAccessibilityNodeInfosByText(text)
@@ -132,9 +125,46 @@ class LiaAccessibilityService : AccessibilityService() {
         return null
     }
 
+    /** WhatsApp / WhatsApp Business চ্যাটের Send বাটন */
+    fun clickWhatsAppSend(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        for (id in listOf("com.whatsapp:id/send", "com.whatsapp.w4b:id/send")) {
+            val n = root.findAccessibilityNodeInfosByViewId(id).firstOrNull { it.isVisibleToUser }
+            if (n != null) return clickNode(n)
+        }
+        return clickText("Send") || clickText("পাঠান")
+    }
+
+    /**
+     * YouTube সার্চ রেজাল্টের প্রথম ভিডিওতে ক্লিক।
+     * allowTapFallback=true হলে না পেলে স্ক্রিনের ওপরের দিকে আন্দাজে ট্যাপ করে।
+     */
+    fun clickFirstVideo(allowTapFallback: Boolean): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val dm = resources.displayMetrics
+        var found: AccessibilityNodeInfo? = null
+
+        fun walk(n: AccessibilityNodeInfo?) {
+            if (n == null || found != null) return
+            val d = n.contentDescription?.toString().orEmpty()
+            if (n.isVisibleToUser && d.length > 20 &&
+                d.contains("play video", ignoreCase = true) &&
+                !d.contains("sponsored", ignoreCase = true)
+            ) {
+                found = n
+                return
+            }
+            for (i in 0 until n.childCount) walk(n.getChild(i))
+        }
+        walk(root)
+
+        val f = found
+        if (f != null) return clickNode(f)
+        return if (allowTapFallback) tap(dm.widthPixels * 0.5f, dm.heightPixels * 0.34f) else false
+    }
+
     // ---------- টাইপ ----------
 
-    /** ফোকাস করা (না থাকলে প্রথম) লেখার বক্সে টাইপ করে */
     fun typeText(text: String, append: Boolean = false): Boolean {
         val root = rootInActiveWindow ?: return false
         val node = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable }
@@ -146,7 +176,6 @@ class LiaAccessibilityService : AccessibilityService() {
         return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
     }
 
-    /** কীবোর্ডের Enter / Search (Android 11+) */
     fun pressEnter(): Boolean {
         if (Build.VERSION.SDK_INT < 30) return false
         val root = rootInActiveWindow ?: return false
