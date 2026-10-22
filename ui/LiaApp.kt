@@ -46,7 +46,6 @@ fun LiaApp() {
         if (nav.previousBackStackEntry != null) nav.popBackStack()
         else nav.navigate("home") { popUpTo("voice") { inclusive = true } }
     }
-    // ভয়েস সেশন চালু থাকা অবস্থায় অ্যাপ খুললে সরাসরি ভয়েস স্ক্রিনে
     val startRoute = remember { if (voice.active) "voice" else "home" }
 
     LiaBackground {
@@ -71,9 +70,13 @@ fun LiaApp() {
                     HistoryScreen(vm, onOpen = { id -> vm.openChat(id); nav.go("chat") })
                 }
                 composable("settings") {
-                    SettingsScreen(onConnections = { nav.navigate("connections") })
+                    SettingsScreen(
+                        onConnections = { nav.navigate("connections") },
+                        onPhone = { nav.navigate("phone") }
+                    )
                 }
                 composable("connections") { ConnectionsScreen(onBack = { nav.popBackStack() }) }
+                composable("phone") { PhoneControlScreen(onBack = { nav.popBackStack() }) }
                 composable("voice") {
                     VoiceScreen(
                         voice = voice,
