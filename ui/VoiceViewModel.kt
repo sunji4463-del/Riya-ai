@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import com.lia.assistant.LiaService
 import com.lia.assistant.data.KeyStore
 import java.util.Locale
 
@@ -31,14 +32,29 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
     private var lastUtteranceId = ""
     private var errorStreak = 0
 
-    /** LiaApp এখানে ChatViewModel বসিয়ে দেয় */
+    /** LiaApplication এখানে ChatViewModel বসিয়ে দেয় */
     var chat: ChatViewModel? = null
 
-    var state by mutableStateOf(VoiceState.IDLE)
-        private set
+    /** LiaService নোটিফিকেশন আপডেটের জন্য এটা বসায় */
+    var onChange: (() -> Unit)? = null
+
+    private var _state by mutableStateOf(VoiceState.IDLE)
+    var state: VoiceState
+        get() = _state
+        private set(v) {
+            _state = v
+            onChange?.invoke()
+        }
+
+    private var _muted by mutableStateOf(false)
+    var muted: Boolean
+        get() = _muted
+        private set(v) {
+            _muted = v
+            onChange?.invoke()
+        }
+
     var active by mutableStateOf(false)
-        private set
-    var muted by mutableStateOf(false)
         private set
     var lang by mutableStateOf(keys.voiceLang)
         private set
@@ -58,6 +74,11 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
         caption = ""
         partial = ""
         chat?.newChat()
+        try {
+            LiaService.start(ctx)
+        } catch (e: Exception) {
+            info = "Background service চালু করা যায়নি: ${e.message}"
+        }
         initTts()
         listen()
     }
@@ -73,6 +94,7 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
         state = VoiceState.IDLE
         partial = ""
         info = ""
+        LiaService.stop(ctx)
     }
 
     fun toggleMute() {
@@ -282,7 +304,6 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
 
-        // লম্বা লেখা টুকরো করে পাঠানো (TTS-এর সীমা আছে)
         val parts = clean.split(Regex("(?<=[.!?।])\\s+")).filter { it.isNotBlank() }
         val chunks = mutableListOf<String>()
         var cur = ""
