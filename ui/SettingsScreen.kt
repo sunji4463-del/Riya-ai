@@ -1,5 +1,6 @@
 package com.lia.assistant.ui
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -50,14 +51,25 @@ fun SettingsScreen(onConnections: () -> Unit) {
         }
 
         SectionTitle("AI SETTINGS")
-        SettingRow(Icons.Rounded.Key, "Connections", "Gemini and Groq keys",
-            if (ready) "Ready" else "Setup", onConnections)
+        SettingRow(
+            Icons.Rounded.Key, "Connections", "Gemini and Groq keys",
+            if (ready) "Ready" else "Setup", onConnections
+        )
         SettingRow(Icons.Rounded.RecordVoiceOver, "Voice & language", "Voice, speed, language") { soon() }
         SettingRow(Icons.Rounded.Forum, "Chats & memory", "Saved chats") { soon() }
 
         SectionTitle("APP SETTINGS")
         SettingRow(Icons.Rounded.Palette, "Look & feel", "Dark - Classic orb") { soon() }
         SettingRow(Icons.Rounded.PhoneAndroid, "Phone control", "Quick actions and permissions") { soon() }
+        SettingRow(
+            Icons.Rounded.BatteryChargingFull,
+            "Background voice",
+            "Set LIA to unrestricted battery"
+        ) {
+            ctx.startActivity(
+                Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            )
+        }
 
         SectionTitle("ABOUT")
         SettingRow(Icons.Rounded.Shield, "Privacy & about", "Your data, version, support") { soon() }
