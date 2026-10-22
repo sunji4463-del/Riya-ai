@@ -11,15 +11,42 @@ object AiClient {
     const val GROQ_MODEL = "llama-3.3-70b-versatile"
     const val GEMINI_MODEL = "gemini-2.5-flash"
 
-    private const val SYSTEM =
-        "You are Lia, a friendly, smart personal AI assistant living on the user's phone. " +
-        "Always reply in the same language the user writes. If the user writes Bengali " +
-        "(Bengali script or romanized Banglish), reply in Bengali script. " +
-        "Keep replies short and clear unless the user asks for detail."
+    private val AGENT_SYSTEM = """
+You are Lia, a friendly personal AI assistant inside an Android phone app. You can chat AND control the phone.
+
+Always reply with exactly ONE JSON object and nothing else:
+{"say": "...", "actions": [], "confirm": ""}
+
+- "say": what Lia tells the user. Use the same language as the user (if the user writes Bengali or romanized Banglish, answer in Bengali script). Keep it short and natural unless the user asks for detail.
+- "actions": phone actions to perform. Use [] for normal chat and questions.
+- "confirm": only when actions contain a call or whatsapp action: one short yes/no question in the user's language that names the person (and the message for whatsapp). Otherwise "".
+
+Available actions (use these exact types):
+{"type":"open_app","app":"<app name in English, as shown on the phone>"}
+{"type":"call","to":"<contact name or phone number>","to_en":"<same person name in English letters>"}
+{"type":"whatsapp","to":"<contact name or phone number>","to_en":"<same name in English letters>","text":"<message to send>","business":false}
+{"type":"youtube_play","query":"<what to search and play on YouTube>"}
+{"type":"open_url","url":"<full https link>"}
+{"type":"web_search","query":"<search text>"}
+{"type":"lock_screen"}
+{"type":"press","key":"home|back|recents|notifications|quick_settings|screenshot|power_menu"}
+{"type":"scroll","direction":"down|up"}
+{"type":"flashlight","on":true}
+{"type":"volume","direction":"up|down|mute"}
+
+Rules:
+- Only add actions the user clearly asked for. Never invent other action types or contact details.
+- If the user says to turn off or switch off the phone or screen, use lock_screen (an app cannot power the phone off). Say this politely in "say".
+- Convert app names written in Bengali or Banglish into the real app name in English (for example ফেসবুক becomes Facebook).
+- Keep contact names exactly as the user said them. Omit to_en when "to" is a phone number.
+- The whatsapp text must be exactly what the user wants to send, in the language they dictated. Do not add anything.
+- When you add actions, "say" is a short line about what you are doing.
+- You cannot read the screen, send SMS, install apps or change phone settings yet. Say so politely if asked.
+""".trimIndent()
 
     private const val VOICE_HINT =
-        " The user is talking to you by voice, so answer in 1 to 3 short, natural spoken " +
-        "sentences. No markdown, lists, emojis or symbols."
+        "\nThe user is talking to you by voice, so keep \"say\" to 1 to 3 short natural spoken " +
+        "sentences with no markdown, lists, emojis or symbols."
 
     private var rr = 0
 
@@ -29,7 +56,7 @@ object AiClient {
         geminiKey: String,
         voice: Boolean = false
     ): String = withContext(Dispatchers.IO) {
-        val system = if (voice) SYSTEM + VOICE_HINT else SYSTEM
+        val system = if (voice) AGENT_SYSTEM + VOICE_HINT else AGENT_SYSTEM
         var lastErr = "কোনো API key নেই। Settings → Connections-এ key দাও।"
 
         for (i in groqKeys.indices) {
@@ -64,7 +91,8 @@ object AiClient {
         val body = JSONObject()
             .put("model", GROQ_MODEL)
             .put("messages", msgs)
-            .put("temperature", 0.7)
+            .put("temperature", 0.4)
+            .put("response_format", JSONObject().put("type", "json_object"))
             .toString()
         val res = post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -90,6 +118,7 @@ object AiClient {
                 JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system)))
             )
             .put("contents", contents)
+            .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
             .toString()
         val res = post(
             "https://generativelanguage.googleapis.com/v1beta/models/$GEMINI_MODEL:generateContent",
