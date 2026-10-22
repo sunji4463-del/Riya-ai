@@ -10,11 +10,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -32,33 +32,48 @@ private fun NavController.go(route: String) = navigate(route) {
 @Composable
 fun LiaApp() {
     val nav = rememberNavController()
+    val vm: ChatViewModel = viewModel()
+    val voice: VoiceViewModel = viewModel()
+    voice.chat = vm
+
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "home"
     val showBar = route in listOf("home", "chat", "history", "settings")
     val imeVisible = WindowInsets.isImeVisible
+    val openVoice: () -> Unit = { nav.navigate("voice") { launchSingleTop = true } }
 
     LiaBackground {
         Scaffold(
             containerColor = Color.Transparent,
             bottomBar = {
                 if (showBar && !imeVisible) {
-                    BottomBar(route, onGo = { nav.go(it) }, onVoice = { nav.navigate("voice") })
+                    BottomBar(route, onGo = { nav.go(it) }, onVoice = openVoice)
                 }
             }
         ) { pad ->
             NavHost(nav, startDestination = "home", modifier = Modifier.padding(pad)) {
                 composable("home") {
                     HomeScreen(
-                        onVoice = { nav.navigate("voice") },
+                        onVoice = openVoice,
                         onChat = { nav.go("chat") },
                         onSettings = { nav.go("settings") }
                     )
                 }
-                composable("chat") { ChatScreen() }
-                composable("history") { HistoryScreen() }
-                composable("settings") { SettingsScreen(onConnections = { nav.navigate("connections") }) }
+                composable("chat") { ChatScreen(vm) }
+                composable("history") {
+                    HistoryScreen(vm, onOpen = { id -> vm.openChat(id); nav.go("chat") })
+                }
+                composable("settings") {
+                    SettingsScreen(onConnections = { nav.navigate("connections") })
+                }
                 composable("connections") { ConnectionsScreen(onBack = { nav.popBackStack() }) }
-                composable("voice") { VoiceScreen(onEnd = { nav.popBackStack() }) }
+                composable("voice") {
+                    VoiceScreen(
+                        voice = voice,
+                        onMinimize = { nav.popBackStack() },
+                        onEnd = { voice.stop(); nav.popBackStack() }
+                    )
+                }
             }
         }
     }
