@@ -18,6 +18,16 @@ class KeyStore(context: Context) {
         get() = sp.getString("voice_lang", "bn-BD") ?: "bn-BD"
         set(v) = sp.edit().putString("voice_lang", v).apply()
 
+    /** WhatsApp নম্বরের জন্য দেশের কোড (শুধু সংখ্যা)। ডিফল্ট 880 = বাংলাদেশ */
+    var countryCode: String
+        get() = sp.getString("country_code", "880") ?: "880"
+        set(v) = sp.edit().putString("country_code", v.filter { it.isDigit() }).apply()
+
+    /** কল ও WhatsApp এর আগে "হ্যাঁ/না" জিজ্ঞেস করবে কিনা */
+    var confirmActions: Boolean
+        get() = sp.getBoolean("confirm_actions", true)
+        set(v) = sp.edit().putBoolean("confirm_actions", v).apply()
+
     fun groqKeyList(): List<String> =
         groqKeys.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 }
